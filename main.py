@@ -11,12 +11,13 @@ from contextlib import asynccontextmanager
 from rag_agent import init_rag_chatbot, get_reply
 import os
 import logging
+import uvicorn
 
 # ── Basic logging setup ──────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ── Railway uses PORT 8080, not 8000 ─────────
+# ── Railway uses PORT from environment ───────
 PORT = int(os.getenv("PORT", 8080))
 
 chatbot = None
@@ -25,8 +26,12 @@ chatbot = None
 async def lifespan(app: FastAPI):
     global chatbot
     logger.info("🚀 Starting up — loading RAG chatbot...")
-    chatbot = init_rag_chatbot()
-    logger.info("✅ Chatbot ready!")
+    try:
+        chatbot = init_rag_chatbot()
+        logger.info("✅ Chatbot ready!")
+    except Exception as e:
+        logger.error(f"❌ Failed to load chatbot: {e}")
+        chatbot = None
     yield
     logger.info("🛑 Shutting down")
 
@@ -35,7 +40,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ── CORS (relaxed for Railway) ──────────────
+# ── CORS (allow all for Railway) ─────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,11 +50,15 @@ app.add_middleware(
 )
 
 # ── Static files mount ──────────────────────
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    logger.info("✅ Static files mounted from /static")
+static_dir = "static"
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    logger.info(f"✅ Static files mounted from /{static_dir}")
 else:
-    logger.warning("⚠️ static folder not found!")
+    logger.warning(f"⚠️ {static_dir} folder not found!")
+    # Create static directory if it doesn't exist
+    os.makedirs(static_dir, exist_ok=True)
+    logger.info(f"📁 Created {static_dir} directory")
 
 # ── Models ──────────────────────────────────
 class ChatRequest(BaseModel):
@@ -65,56 +74,83 @@ class ChatResponse(BaseModel):
 @app.get("/")
 async def serve_index():
     """Serve the portfolio HTML"""
-    possible_paths = [
+    logger.info("📄 Serving index page")
+    
+    # Check common paths
+    index_paths = [
         "static/index.html",
         "index.html",
         "./static/index.html",
-        "../static/index.html"
     ]
     
-    for path in possible_paths:
+    for path in index_paths:
         if os.path.exists(path):
-            logger.info(f"✅ Serving index from: {path}")
+            logger.info(f"✅ Found index at: {path}")
             return FileResponse(path)
     
-    logger.error("❌ index.html not found in any location!")
-    return {"error": "Index file not found", "paths_checked": possible_paths}
+    # If no index.html, return simple message
+    logger.error("❌ index.html not found")
+    return {"message": "Portfolio site is running", "status": "ok", "endpoints": ["/chat", "/health", "/debug"]}
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Railway"""
-    return {"status": "healthy", "chatbot_ready": chatbot is not None}
+    return {
+        "status": "healthy", 
+        "chatbot_ready": chatbot is not None,
+        "port": PORT
+    }
+
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint for testing"""
+    return {"pong": True}
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    logger.info(f"💬 Received: {request.message[:50]}...")
+    
     if chatbot is None:
-        logger.error("Chatbot not ready")
-        raise HTTPException(status_code=503, detail="Chatbot not ready")
+        logger.error("❌ Chatbot not ready")
+        raise HTTPException(status_code=503, detail="Chatbot is initializing, please try again")
     
     if not request.message.strip():
-        logger.warning("Empty message received")
+        logger.warning("⚠️ Empty message received")
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
     try:
-        logger.info(f"💬 Chat request: {request.message[:50]}...")
         reply = get_reply(chatbot, request.message)
         logger.info(f"✅ Response sent ({len(reply)} chars)")
         return ChatResponse(response=reply)
     except Exception as e:
-        logger.error(f"❌ Error in /chat: {e}")
+        logger.error(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── Debug endpoint (optional) ────────────────
 @app.get("/debug")
 async def debug():
-    """Debug endpoint to see what files exist"""
+    """Debug endpoint"""
+    import os
     files = os.listdir(".")
-    static_files = os.listdir("static") if os.path.exists("static") else []
+    static_exists = os.path.exists("static")
+    static_files = os.listdir("static") if static_exists else []
+    index_exists = os.path.exists("static/index.html")
     
     return {
-        "current_directory": os.getcwd(),
-        "files": files[:20],
-        "static_folder_exists": os.path.exists("static"),
+        "cwd": os.getcwd(),
+        "port": PORT,
+        "chatbot_ready": chatbot is not None,
+        "static_exists": static_exists,
         "static_files": static_files[:10],
-        "index_exists": os.path.exists("static/index.html")
+        "index_exists": index_exists,
+        "all_files": files[:20]
     }
+
+# ── Main entry point for Railway ────────────
+if __name__ == "__main__":
+    logger.info(f"🚀 Starting server on port {PORT}")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=PORT,
+        reload=False  # Important: reload=False for production
+    )
