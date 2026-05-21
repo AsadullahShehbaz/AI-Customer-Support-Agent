@@ -1,0 +1,170 @@
+# ─────────────────────────────────────────────
+#  Python & FastAPI + LangGraph + RAG Portfolio
+#  Comprehensive .gitignore
+# ─────────────────────────────────────────────
+
+# ── Python bytecode & packaging ──────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+pytype-output/
+
+# ── Virtual environments ────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+pythonenv*
+*env/
+
+# ── IDE & Editor files ──────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.desktop.ini
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.orig
+
+# ── Jupyter Notebook ────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+*.ipynb_checkpoints
+
+# ── Environment variables & secrets ────────
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+secrets/
+credentials/
+api_keys.txt
+
+# ── Project specific (RAG / Vector DB) ──────
+# FAISS vector stores
+*.faiss
+*.pkl
+*.pickle
+vector_store/
+faiss_index/
+chroma_db/
+*.db
+
+# LangGraph checkpoints / state
+langgraph_checkpoints/
+checkpoints/
+*.sqlite
+*.sqlite3
+
+# Document chunks cache
+chunks/
+documents_cache/
+*.pkl
+*.cache
+
+# ── Logs & databases ────────────────────────
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+*.db
+*.sqlite
+
+# ── Testing & coverage ──────────────────────
+.coverage
+.coverage.*
+.coverage.*.random
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ── Build & distribution ────────────────────
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+site/
+
+# ── Miscellaneous ───────────────────────────
+# Local development overrides
+*.local
+*.bak
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup
+*.old
+*.save
+
+# Node modules (if you have any JS tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ── Docker (optional, if you use Docker) ────
+docker-compose.override.yml
+*.tar.gz
+*.tar
+docker/volumes/
+
+# ── Your specific project files ─────────────
+# Resume (keep private if sensitive)
+# resume.pdf  ← UNCOMMENT if you don't want to push your resume to GitHub
+
+# Local configuration
+config.local.py
+settings.local.py
+
+# MLflow (if used)
+mlruns/
+mlartifacts/
+
+# ── Keep these important files but exclude their caches ──
+!.gitkeep
+!.env.example
+!requirements.txt
+!Procfile
+!runtime.txt
