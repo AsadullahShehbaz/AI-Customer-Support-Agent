@@ -1,6 +1,7 @@
 # Asadullah Shehbaz · AI-Customer-Support-RAG-Agent
 **AI-powered portfolio with agentic rag chatbot** using FastAPI, LangGraph, Groq LLM, and FAISS vector search.\
-![Try Now](https://asadullahshehbaz.up.railway.app/)
+[Try Now](https://asadullahshehbaz.up.railway.app/)
+
 [![Hero Section](hero-section.png)](https://asadullahshehbaz.up.railway.app/ "target=_blank")
 [![About Section](about-section.png)](https://asadullahshehbaz.up.railway.app/ "target=_blank")
 [![AI Assistant](ai-assistant.png)](https://asadullahshehbaz.up.railway.app/ "target=_blank")
