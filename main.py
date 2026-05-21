@@ -1,115 +1,120 @@
 # ─────────────────────────────────────────────
-#  main.py  —  FastAPI server for portfolio chatbot
-#  Run with:  uvicorn main:app --reload
+#  main.py  —  FastAPI server for Railway deployment
 # ─────────────────────────────────────────────
 
-# ── 1. Imports ──────────────────────────────
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from rag_agent import init_rag_chatbot, get_reply
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse  
+import os
+import logging
 
-# ── 2. Startup: load the chatbot once ────────
-# Using lifespan so the heavy PDF + embeddings
-# loading happens only ONCE when the server starts
+# ── Basic logging setup ──────────────────────
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-chatbot = None   # will be set at startup
+# ── Railway uses PORT 8080, not 8000 ─────────
+PORT = int(os.getenv("PORT", 8080))
+
+chatbot = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global chatbot
-    print("🚀 Starting up — loading RAG chatbot...")
-    chatbot = init_rag_chatbot()   # ← heavy work done here once
-    print("✅ Chatbot ready!")
+    logger.info("🚀 Starting up — loading RAG chatbot...")
+    chatbot = init_rag_chatbot()
+    logger.info("✅ Chatbot ready!")
     yield
-    # (cleanup code could go here if needed)
-    print("🛑 Shutting down")
+    logger.info("🛑 Shutting down")
 
-
-# ── 3. Create FastAPI app ────────────────────
 app = FastAPI(
     title="Asadullah Portfolio Chatbot API",
-    description="RAG-powered chatbot using LangGraph + Groq + FAISS",
-    version="1.0.0",
     lifespan=lifespan
 )
 
-
-# ── 4. CORS — allows your portfolio HTML to call this API ──
-# During development: allow all origins (*)
-# In production: replace * with your actual domain
+# ── CORS (relaxed for Railway) ──────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # e.g. ["https://yourportfolio.com"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# ── Static files mount ──────────────────────
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    logger.info("✅ Static files mounted from /static")
+else:
+    logger.warning("⚠️ static folder not found!")
 
-# Replace the broken route with this:
-
-# ── 5. Request & Response models ─────────────
+# ── Models ──────────────────────────────────
 class ChatRequest(BaseModel):
-    message: str           # the visitor's question
-    # session_id: str = "portfolio_visitor"   # optional, ignored for now
-
+    message: str
+    session_id: str = "portfolio_visitor"
 
 class ChatResponse(BaseModel):
-    response: str          # the AI reply
+    response: str
     status: str = "ok"
 
-
-# ── 6. Routes ────────────────────────────────
+# ── Routes ──────────────────────────────────
 
 @app.get("/")
-def serve_portfolio():
-    return FileResponse("static/index.html")  # ✅ Returns the actual file
+async def serve_index():
+    """Serve the portfolio HTML"""
+    possible_paths = [
+        "static/index.html",
+        "index.html",
+        "./static/index.html",
+        "../static/index.html"
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"✅ Serving index from: {path}")
+            return FileResponse(path)
+    
+    logger.error("❌ index.html not found in any location!")
+    return {"error": "Index file not found", "paths_checked": possible_paths}
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway"""
+    return {"status": "healthy", "chatbot_ready": chatbot is not None}
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    """
-    Main chat endpoint.
-    
-    Called by your portfolio's script.js:
-        fetch('http://localhost:8000/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: userText })
-        })
-    """
-    # Guard: chatbot not ready (very rare edge case)
+async def chat(request: ChatRequest):
     if chatbot is None:
-        raise HTTPException(status_code=503, detail="Chatbot not ready yet, try again in a moment")
-
-    # Guard: empty message
+        logger.error("Chatbot not ready")
+        raise HTTPException(status_code=503, detail="Chatbot not ready")
+    
     if not request.message.strip():
+        logger.warning("Empty message received")
         raise HTTPException(status_code=400, detail="Message cannot be empty")
-
+    
     try:
+        logger.info(f"💬 Chat request: {request.message[:50]}...")
         reply = get_reply(chatbot, request.message)
+        logger.info(f"✅ Response sent ({len(reply)} chars)")
         return ChatResponse(response=reply)
-
     except Exception as e:
-        # Log the real error on the server, return friendly message to user
-        print(f"❌ Error in /chat: {e}")
-        raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
+        logger.error(f"❌ Error in /chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-# ── 7. How to run ─────────────────────────────
-# Terminal:
-#   pip install fastapi uvicorn langchain langchain-groq langchain-huggingface
-#   pip install langchain-community langgraph faiss-cpu pypdf sentence-transformers python-dotenv
-#
-#   uvicorn main:app --reload
-#
-# Then update your script.js:
-#   const API_ENDPOINT = 'http://localhost:8000/chat';
-#
-# For production deploy on Render/Railway:
-#   uvicorn main:app --host 0.0.0.0 --port $PORT
+# ── Debug endpoint (optional) ────────────────
+@app.get("/debug")
+async def debug():
+    """Debug endpoint to see what files exist"""
+    files = os.listdir(".")
+    static_files = os.listdir("static") if os.path.exists("static") else []
+    
+    return {
+        "current_directory": os.getcwd(),
+        "files": files[:20],
+        "static_folder_exists": os.path.exists("static"),
+        "static_files": static_files[:10],
+        "index_exists": os.path.exists("static/index.html")
+    }

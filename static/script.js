@@ -12,11 +12,15 @@ new Typed('#typed-el', {
   loop:true,cursorChar:'|',smartBackspace:true
 });
 
+console.log('✅ Typed.js initialized');
+
 /* ── MOBILE NAV ── */
 const ham=document.getElementById('ham');
 const navMenu=document.getElementById('navMenu');
 ham.addEventListener('click',()=>navMenu.classList.toggle('open'));
 navMenu.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>navMenu.classList.remove('open')));
+
+console.log('✅ Mobile nav initialized');
 
 /* ── ACTIVE NAV HIGHLIGHT ── */
 const secs=document.querySelectorAll('section[id]');
@@ -36,10 +40,12 @@ const io=new IntersectionObserver(entries=>{
 },{threshold:.08,rootMargin:'0px 0px -50px 0px'});
 revEls.forEach(el=>io.observe(el));
 
+console.log('✅ Scroll reveal initialized');
+
 /* ── RESUME DOWNLOAD ── */
 function downloadResume(){
-  // Replace with your hosted PDF URL
   const url='YOUR_RESUME_PDF_URL_HERE';
+  console.log('📄 Downloading resume...');
   const a=document.createElement('a');
   a.href=url;a.download='Asadullah_Shehbaz_Resume.pdf';a.target='_blank';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
@@ -47,8 +53,8 @@ function downloadResume(){
 document.getElementById('resumeBtn')?.addEventListener('click',downloadResume);
 
 /* ── CHATBOT ── */
-// Replace this with your FastAPI endpoint when ready
-const API_ENDPOINT = 'http://localhost:8000/chat';
+const API_ENDPOINT = '/chat';
+console.log(`💬 Chatbot API endpoint: ${API_ENDPOINT}`);
   
 const chatFab=document.getElementById('chatFab');
 const chatPanel=document.getElementById('chatPanel');
@@ -66,7 +72,12 @@ function toggleChat(state){
   chatFab.classList.toggle('open',isOpen);
   chatFab.querySelector('.ic-chat').style.display = isOpen ? 'none' : 'block';
   chatFab.querySelector('.ic-close').style.display = isOpen ? 'block' : 'none';
-  if(isOpen) cpInput.focus();
+  if(isOpen) {
+    cpInput.focus();
+    console.log('💬 Chat opened');
+  } else {
+    console.log('💬 Chat closed');
+  }
 }
 
 chatFab.addEventListener('click',()=>toggleChat());
@@ -83,6 +94,7 @@ function addMsg(text,role){
   div.style.animationDelay='0s';
   cpMsgs.appendChild(div);
   cpMsgs.scrollTop=cpMsgs.scrollHeight;
+  console.log(`💬 Added ${role} message: ${text.substring(0,50)}...`);
 }
 
 function showTyping(){
@@ -91,53 +103,73 @@ function showTyping(){
   d.innerHTML=`<div class="typing-bub"><span></span><span></span><span></span></div>`;
   cpMsgs.appendChild(d);
   cpMsgs.scrollTop=cpMsgs.scrollHeight;
+  console.log('⌨️ Showing typing indicator...');
 }
-function hideTyping(){document.getElementById('typingEl')?.remove()}
 
-// const demoReplies=[
-//   "I specialize in Agentic AI pipelines, RAG architectures, LangGraph, FastAPI, MLOps, and n8n automation. I've built 11+ production AI systems. What specifically interests you?",
-//   "I've built projects across agentic AI, RAG, computer vision, NLP, and ML automation. My latest is an AI Voice Receptionist for dental clinics. Check the Projects section for live demos!",
-//   "Yes! I'm available for freelance and remote work. I can build AI agents, RAG systems, automation workflows, or end-to-end ML pipelines. Reach me at asadullahcreative@gmail.com.",
-//   "I'm ranked #26 globally on Kaggle in Datasets — achieved both Grandmaster and Notebook Expert tiers in just 11 months. You can view my Kaggle profile for details.",
-//   "My tech stack includes Python, LangChain, LangGraph, FastAPI, Docker, MLflow, FAISS, ChromaDB, n8n, ElevenLabs, Groq API, TensorFlow, PyTorch, and more.",
-//   "I completed internships at Elevo Pathways (ML Engineer) and Skilled Score (Data Science) in 2025, where I built and deployed ML solutions for real business problems.",
-// ];
+function hideTyping(){
+  const el = document.getElementById('typingEl');
+  if(el) el.remove();
+  console.log('✅ Typing indicator removed');
+}
 
 async function sendMsg(text){
-  if(!text.trim())return;
+  if(!text.trim()) {
+    console.warn('⚠️ Empty message ignored');
+    return;
+  }
+  
+  console.log(`💬 Sending message: "${text}"`);
   cpQuick.style.display='none';
   cpInput.value='';
   cpSend.disabled=true;
   addMsg(text,'user');
   showTyping();
 
-  /* ── Uncomment below & remove demo section to use your real FastAPI ──*/
   try{
+    console.log(`📡 Fetching ${API_ENDPOINT}...`);
     const res=await fetch(API_ENDPOINT,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({message:text})
     });
+    
+    console.log(`📡 Response status: ${res.status}`);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    
     const data=await res.json();
+    console.log(`📡 Response data:`, data);
+    
     hideTyping();
-    addMsg(data.response||data.answer||data.message,'bot');
-  }catch(err){
+    const reply = data.response || data.answer || data.message || 'No response from server';
+    addMsg(reply,'bot');
+    console.log(`✅ Bot reply sent (${reply.length} chars)`);
+    
+  } catch(err){
+    console.error('❌ Chat error:', err);
     hideTyping();
     addMsg('⚠️ Unable to connect to the API. Check your endpoint configuration.','bot');
+  } finally {
+    cpSend.disabled=false;
+    console.log('💬 Chat request completed');
   }
-  /*── end real API section ── */
-
-  // DEMO MODE — remove when connecting real API_ENDPOINT
-  // setTimeout(()=>{
-  //   hideTyping();
-  //   addMsg(demoReplies[Math.floor(Math.random()*demoReplies.length)],'bot');
-  //   cpSend.disabled=false;
-  // },1200+Math.random()*700);
 }
 
 cpSend.addEventListener('click',()=>sendMsg(cpInput.value));
 cpInput.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg(cpInput.value)}
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    console.log('⌨️ Enter pressed, sending message');
+    sendMsg(cpInput.value);
+  }
 });
 
-function quickSend(t){sendMsg(t)}
+function quickSend(t){
+  console.log(`🔘 Quick reply clicked: "${t}"`);
+  sendMsg(t);
+}
+
+console.log('✅ Chatbot initialized and ready');
+console.log('💡 Open console (F12) to see chat logs');
